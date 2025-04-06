@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SmartEd Quiz App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background: #f7f8fa;
+      color: #333;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    select, button {
+      padding: 0.5rem;
+      margin: 1rem auto;
+      display: block;
+    }
+
+    .mcq {
+      background: white;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .result {
+      background: #e0f7fa;
+      border-left: 5px solid #00acc1;
+      padding: 1rem;
+      margin-top: 2rem;
+    }
+
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    li {
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>SmartEd: Personalized Learning Quiz</h1>
+
+  <label for="topic">Choose a Topic:</label>
+  <select id="topic">
+    <option value="">-- Select --</option>
+    <option value="Python">Python</option>
+    <option value="JavaScript">JavaScript</option>
+    <!-- Add more topics here -->
+  </select>
+
+  <button onclick="startQuiz()">Start Quiz</button>
+
+  <div id="quiz-area"></div>
+  <button id="submit-btn" onclick="submitAnswers()" style="display:none;">Submit Answers</button>
+
+  <div class="result" id="result-area" style="display:none;"></div>
+
+  <script>
+    let mcqs = [];
+
+    async function startQuiz() {
+      const topic = document.getElementById('topic').value;
+      if (!topic) {
+        alert("Please select a topic.");
+        return;
+      }
+
+      const response = await fetch('/get_mcqs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic })
+      });
+
+      const data = await response.json();
+      mcqs = data.mcqs;
+
+      if (!mcqs.length) {
+        alert("No MCQs received. Try again.");
+        return;
+      }
+
+      const quizArea = document.getElementById('quiz-area');
+      quizArea.innerHTML = '';
+
+      mcqs.forEach((q, index) => {
+        const optionsHtml = q.options.map((opt, i) => `
+          <label><input type="radio" name="q${index}" value="${opt}"> ${opt}</label><br>
+        `).join('');
+
+        quizArea.innerHTML += `
+          <div class="mcq">
+            <strong>Q${index + 1}:</strong> ${q.question}<br><br>
+            ${optionsHtml}
+          </div>
+        `;
+      });
+
+      document.getElementById('submit-btn').style.display = 'block';
+      document.getElementById('result-area').style.display = 'none';
+    }
+
+    async function submitAnswers() {
+      const topic = document.getElementById('topic').value;
+      const answers = [];
+
+      let unanswered = 0;
+
+      mcqs.forEach((q, i) => {
+        const selected = document.querySelector(`input[name="q${i}"]:checked`);
+        if (!selected) {
+          unanswered++;
+        }
+
+        answers.push({
+          question: q.question,
+          options: q.options,
+          correct_answer: q.correct_answer,
+          user_answer: selected ? selected.value : null
+        });
+      });
+
+      if (unanswered > 0) {
+        if (!confirm(`You missed ${unanswered} questions. Submit anyway?`)) return;
+      }
+
+      const response = await fetch('/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, answers })
+      });
+
+      const result = await response.json();
+      const resultDiv = document.getElementById('result-area');
+
+      resultDiv.innerHTML = `
+        <h2>Results</h2>
+        <p>Score: ${result.score} / ${result.total}</p>
+        <h3>Recommended Roadmap:</h3>
+        <ul>${result.roadmap.map(item => `<li>${item}</li>`).join('')}</ul>
+      `;
+      resultDiv.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
